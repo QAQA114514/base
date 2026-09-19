@@ -1,16 +1,16 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<link rel="shortcut icon" href="/base/appicon.ico">
-<link rel="icon" href="/base/editor/appicon.ico">
+<link rel="shortcut icon" href="/appicon.ico">
+<link rel="icon" href="/editor/appicon.ico">
 <meta charset="UTF-8">
 <title>Tile Map Editor</title>
-<link rel="stylesheet" href="/base/assets/style.css">
+<link rel="stylesheet" href="./assets/style.css">
 <script src="https://cdn.jsdelivr.net/npm/crypto-js@4.1.1/crypto-js.min.js"></script>
 <style>
 @font-face {
     font-family: "SenRegular";
-    src: url("/base/assets/sen-regular.ttf") format("truetype");
+    src: url("./assets/sen-regular.ttf") format("truetype");
     font-weight: normal;
     font-style: normal;
 }
@@ -766,7 +766,7 @@ button:disabled {
         <h4 style="margin:0;font-size:14px;">Output / Preview</h4>
         <div class="output-header-buttons">
             <button id="reloadOutputBtn" title="Reload output from canvas">
-                <img src="/base/assets/icons/reload.png" alt="reload">
+                <img src="assets/icons/reload.png" alt="reload">
             </button>
             <button id="realTimeToggleBtn">real‑time edit mode</button>
         </div>
@@ -898,9 +898,9 @@ function renderLevelCardList(){
                 <div class="level-card-meta">rows:${levelItem.rows} | created:${levelItem.createTime}</div>
             </div>
             <div class="level-card-actions">
-                <div class="level-card-btn save-btn" title="Save overwrite this level"><img src="/base/assets/icons/save.png" alt="save"></div>
-                <div class="level-card-btn edit-btn" title="Edit Level"><img src="/base/assets/icons/edit.png" alt="edit"></div>
-                <div class="level-card-btn del-btn" title="Delete Level"><img src="/base/assets/icons/delete.png" alt="delete"></div>
+                <div class="level-card-btn save-btn" title="Save overwrite this level"><img src="./assets/icons/save.png" alt="save"></div>
+                <div class="level-card-btn edit-btn" title="Edit Level"><img src="./assets/icons/edit.png" alt="edit"></div>
+                <div class="level-card-btn del-btn" title="Delete Level"><img src="./assets/icons/delete.png" alt="delete"></div>
             </div>`;
         card.querySelector(".save-btn").onclick = ()=>{
             showModal(`Overwrite save level: ${levelItem.name} ?`,[
@@ -997,8 +997,10 @@ height=${rows}
 tilewidth=64
 tileheight=64
 orientation=orthogonal
+
 [tilesets]
 tileset=${currentTilesetFileName},64,64,0,0
+
 [layer]
 type=Level
 data=
@@ -1597,36 +1599,547 @@ async function loadPngSpriteSheet(file){
                 tileIdMap={"00":0};
                 const BATCH_SIZE = 200;
                 let seq=1;
-               for(let y=0;y<rowsCount;y++){
-    for(let x=0;x<colsCount;x++){
-        const c=document.createElement("canvas");c.width=tw;c.height=th;
-        const ctx=c.getContext("2d",{willReadFrequently:true});
-        ctx.drawImage(bigImg,x*tw,y*th,tw,th,0,0,tw,th);
-        const tileId=String(seq).padStart(2,"0");
-        tileList.push({img:null,id:tileId,isEmptyTile:false,src:c.toDataURL("image/png")});
-        tileIdMap[tileId] = tileList.length - 1;
-        seq++;
-        if(seq % BATCH_SIZE ===0){
-            loadText.textContent=`Slicing tile spritesheet... ${seq} / ${totalTiles}`;
-            loadProgress.value=Math.round((seq/totalTiles)*100);
-            await new Promise(r=>setTimeout(r,0));
+                for(let y=0;y<rowsCount;y++){
+                    for(let x=0;x<colsCount;x++){
+                        const c=document.createElement("canvas");c.width=tw;c.height=th;
+                        const ctx=c.getContext("2d",{willReadFrequently:true});
+                        ctx.drawImage(bigImg,x*tw,y*th,tw,th,0,0,tw,th);
+                        const tileId=String(seq).padStart(2,"0");
+                        tileList.push({img:null,id:tileId,isEmptyTile:false,src:c.toDataURL("image/png")});
+                        tileIdMap[tileId] = tileList.length - 1;
+                        seq++;
+                        if(seq % BATCH_SIZE ===0){
+                            loadText.textContent=`Slicing tile spritesheet... ${seq} / ${totalTiles}`;
+                            loadProgress.value=Math.round((seq/totalTiles)*100);
+                            await new Promise(r=>setTimeout(r,0));
+                        }
+                    }
+                }
+                sortTilesById();
+                refreshPresetIconsAfterTilesReady();
+                resolve(true);
+            };
+            bigImg.onerror=()=>{
+                alert("Failed to load PNG image file!");
+                resolve(false);
+            };
+            bigImg.src = imgDataUrl;
+        };
+        reader.onerror = ()=>{
+            alert("FileReader read file error!");
+            resolve(false);
+        };
+        reader.readAsDataURL(file);
+    });
+}
+async function loadRemoteSpriteSheet(imageUrl){
+    return new Promise((resolve)=>{
+        loadText.textContent="Auto loading tile spritesheet from GitHub...\nPlease wait, image will be sliced into 64x64 tiles.";
+        loadProgress.value=10;
+        const bigImg=new Image();
+        let loadTimeout = setTimeout(()=>{
+            bigImg.onload=null; bigImg.onerror=null;
+            loadText.textContent="Remote tileset request timeout!\nPlease select local PNG manually.";
+            loadProgress.value=0;
+            resolve(false);
+        },10000);
+        bigImg.crossOrigin="anonymous";
+        bigImg.onload=async function(){
+            clearTimeout(loadTimeout);
+            const tw=TILE_SIZE,th=TILE_SIZE;
+            const colsCount=Math.floor(bigImg.width/tw);
+            const rowsCount=Math.floor(bigImg.height/th);
+            const totalTiles=colsCount*rowsCount;
+            if(totalTiles<=0){
+                loadText.textContent="Remote image too small, cannot cut 64x64 tiles!\nPlease select local PNG manually.";
+                loadProgress.value=0;
+                resolve(false);
+                return;
+            }
+            tileList = tileList.filter(t=>t.isEmptyTile);
+            tileIdMap={"00":0};
+            const BATCH_SIZE = 200;
+            let seq=1;
+            for(let y=0;y<rowsCount;y++){
+                for(let x=0;x<colsCount;x++){
+                    const c=document.createElement("canvas");c.width=tw;c.height=th;
+                    const ctx=c.getContext("2d",{willReadFrequently:true});
+                    ctx.drawImage(bigImg,x*tw,y*th,tw,th,0,0,tw,th);
+                    const tileId=String(seq).padStart(2,"0");
+                    tileList.push({img:null,id:tileId,isEmptyTile:false,src:c.toDataURL("image/png")});
+                    tileIdMap[tileId] = tileList.length - 1;
+                    seq++;
+                    if(seq % BATCH_SIZE ===0){
+                        loadText.textContent=`Slicing remote tiles... ${seq} / ${totalTiles}`;
+                        loadProgress.value=Math.round((seq/totalTiles)*100);
+                        await new Promise(r=>setTimeout(r,0));
+                    }
+                }
+            }
+            sortTilesById();
+            refreshPresetIconsAfterTilesReady();
+            loadProgress.value=100;
+            resolve(true);
+        };
+        bigImg.onerror=()=>{
+            clearTimeout(loadTimeout);
+            loadText.textContent="Failed to load remote tileset!\nNetwork/CORS error, please select local PNG manually.";
+            loadProgress.value=0;
+            resolve(false);
+        };
+        bigImg.src = imageUrl;
+    });
+}
+async function autoLoadGithubTileset(){
+    const REMOTE_TILES_URL = "https://raw.githubusercontent.com/QAQA114514/rolling-sky-ugc-web-mod-assets/main/QAQA-UGC-tileset.png";
+    currentTilesetFileName = "QAQA‑UGC‑tileset.png";
+    const ok = await loadRemoteSpriteSheet(REMOTE_TILES_URL);
+    if(ok){
+        editorReady=true;
+        loadingOverlay.style.display="none";
+        newMap();render();renderPalette();renderQuickBar();layoutQuickPanel();
+        undoStack.length=0;redoStack.length=0;updateUndoRedoButtonState();
+        updateQuickIdStatus();
+    }
+}
+function expandMapUp(addCount){
+    if(!editorReady) return;
+    pushUndoSnapshot();
+    addCount = parseInt(addCount,10);
+    if(isNaN(addCount)||addCount<1){alert("Please input valid expand rows number >= 1");return;}
+    const newEmptyRows=[];
+    for(let i=0;i<addCount;i++){const r=[];for(let x=0;x<cols;x++)r.push(-1);newEmptyRows.push(r);}
+    mapData.push(...newEmptyRows);
+    rows += addCount;
+    document.getElementById("inRows").value=rows;
+    render();
+    layoutQuickPanel();
+    alert(`Expand map up complete! Added ${addCount} rows on top.\nTotal rows now: ${rows}`);
+}
+btnExpandMapUp.onclick = function(){expandMapUp(document.getElementById("inAddRows").value);};
+function getBlockTargetId(s){
+    switch(s){
+        case "00":return "181";case "01":return "182";case "02":return "184";
+        case "03":case "04":case "05":case "06":case "07":case "08":return "183";
+        default:return null;
+    }
+}
+function runGenerateBlock(){
+    if(!editorReady)return;
+    pushUndoSnapshot();
+    let modifiedCount=0;
+    const targetId_181="181";
+    let maxUsedY=-1;
+    for(let y=0;y<rows;y++){for(let x=0;x<cols;x++){if(mapData[y][x]!==-1){maxUsedY=y;break;}}}
+    if(maxUsedY===-1){alert("Map is empty, nothing to generate.");return;}
+    for(let y=0;y<=maxUsedY;y++){
+        if((y+1)%14!==0)continue;
+        for(let x=0;x<cols;x++){
+            const tileArrIndex=mapData[y][x];
+            if(tileArrIndex===-1){if(tileIdMap.hasOwnProperty(targetId_181)){mapData[y][x]=tileIdMap[targetId_181];modifiedCount++;}continue;}
+            const origTileObj=tileList[tileArrIndex];if(!origTileObj||!origTileObj.id)continue;
+            const targetBlockId=getBlockTargetId(String(origTileObj.id));
+            if(targetBlockId===null)continue;
+            if(tileIdMap.hasOwnProperty(targetBlockId)){mapData[y][x]=tileIdMap[targetBlockId];modifiedCount++;}
+        }
+    }
+    render();
+    layoutQuickPanel();
+    alert(`Generate block finished. Modified ${modifiedCount} cells.\nGenerated up to visible row ${maxUsedY+1}.\nNote: missing block‑tiles will be skipped.`);
+}
+generateBlockBtnDom.onclick=runGenerateBlock;
+function sortTilesById(){
+    const selectedId=selectedTile!==null ? tileList[selectedTile].id:null;
+    tileList.sort((a,b)=>{
+        const aid=String(a.id??"");const bid=String(b.id??"");
+        return aid.localeCompare(bid,undefined,{numeric:true});
+    });
+    tileIdMap={};
+    tileList.forEach((t,idx)=>{tileIdMap[t.id]=idx;});
+    if(selectedId&&tileIdMap.hasOwnProperty(selectedId)){selectedTile=tileIdMap[selectedId];}else{selectedTile=null;}
+}
+function exportQuickBrushFile(){
+    const saveName=prompt("Save quick‑brush file name:","quick_brush");
+    if(saveName===null||!saveName.trim())return;
+    const jsContent=`const quickBrushList = ${JSON.stringify(quickTileIdList,null,2)};\n`;
+    const blob=new Blob([jsContent],{type:"application/javascript"});
+    const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download=`${saveName.trim()}.js`;
+    document.body.appendChild(a);a.click();a.remove();
+}
+exportQuickBrushBtn.onclick=exportQuickBrushFile;
+function getSaveFileName(ext){
+    let name=prompt("Enter level file name (will save inside buckets/ directory):","level_01");
+    if(name===null)return null;name=name.trim();
+    if(!name){alert("File name cannot be empty");return null;}
+    name=name.replace(/[\/\\:*?"<>|]/g,"_");
+    return `buckets/${name}.${ext}`;
+}
+function initEmptyZeroTile(){tileList.push({img:null,id:"00",isEmptyTile:true});tileIdMap["00"]=0;}
+function getNextAutoId(){
+    if(externalPresetIdList&&externalPresetIndex<externalPresetIdList.length){
+        const idVal=String(externalPresetIdList[externalPresetIndex]);externalPresetIndex++;return idVal;
+    }else{const s=String(autoIdCounter).padStart(2,"0");autoIdCounter++;return s;}
+}
+function newMap(){
+    mapData=[];
+    for(let y=0;y<rows;y++){let r=[];for(let x=0;x<cols;x++)r.push(-1);mapData.push(r);}
+}
+function updateCellDOM(cellEl,logicalY,x){
+    const tidx=mapData[logicalY][x];
+    cellEl.style.backgroundImage="";cellEl.style.backgroundColor="transparent";
+    if(tidx===-1){}
+    else if(tidx===0){cellEl.style.backgroundColor="#2a2a2a";}
+    else if(tidx>=0){
+        const tile=tileList[tidx];
+        if(tile.placeholder||tile.src===null){cellEl.style.backgroundColor="#382020";}
+        else{
+            cellEl.style.backgroundColor="#2a2a2a";
+            cellEl.style.backgroundImage=`url(${tile.src})`;
+            cellEl.style.backgroundSize="contain";
+            cellEl.style.backgroundPosition="center";
+            cellEl.style.backgroundRepeat="no‑repeat";
         }
     }
 }
-sortTilesById();
-refreshPresetIconsAfterTilesReady();
-resolve(true);
-};
-bigImg.onerror=()=>{
-    alert("Failed to load PNG image file!");
-    resolve(false);
-};
-bigImg.src = imgDataUrl;
-};
-reader.onerror = ()=>{
-    alert("FileReader read file error!");
-    resolve(false);
-};
-reader.readAsDataURL(file);
-});
+function render(){
+    canvasWrap.innerHTML="";yLabelWrap.innerHTML="";
+    for(let y=0;y<rows;y++){
+        const labelDiv=document.createElement("div");labelDiv.className="y-label";labelDiv.textContent=y+1;
+        if((y+1)%14===0)labelDiv.classList.add("highlightBlockLabel");
+        yLabelWrap.appendChild(labelDiv);
+    }
+    for(let domRow=rows-1;domRow>=0;domRow--){
+        const logicalY=domRow;
+        const rowDiv=document.createElement("div");rowDiv.className="row";
+        if((logicalY+1)%14===0)rowDiv.classList.add("highlightBlockLabel");
+        for(let x=0;x<cols;x++){
+            const cell=document.createElement("div");
+            cell.className="tile-cell";
+            cell.dataset.logicalY=domRow;cell.dataset.x=x;
+            updateCellDOM(cell,domRow,x);
+            cell.onmousedown=(e)=>{
+                if(!editorReady)return;e.preventDefault();
+                if(extractMode){
+                    const tileIndex=mapData[domRow][x];
+                    if(tileIndex!==-1){
+                        selectedTile=tileIndex;tileIdInput.value=tileList[selectedTile].id??"";
+                        renderPalette();renderQuickBar();
+                    }
+                    return;
+                }
+                pushUndoSnapshot();
+                isDragging=true;paintCell(cell,domRow,x);
+            };
+            cell.onmouseenter=()=>{
+                if(!editorReady)return;
+                if(extractMode)return;
+                if(isDragging){
+                    paintCell(cell,domRow,x);
+                }
+                if(idScanMode){
+                    const rect = cell.getBoundingClientRect();
+                    scanOverlay.style.top = rect.top + "px";
+                    scanOverlay.style.left = rect.left + "px";
+                    scanOverlay.style.width = rect.width + "px";
+                    scanOverlay.style.height = rect.height + "px";
+                    scanOverlay.style.display="block";
+                    const tidx = mapData[domRow][x];
+                    if(tidx===-1){
+                        scanIdStatusEl.textContent="Id Scan: empty";
+                    }else{
+                        const tid = tileList[tidx].id;
+                        scanIdStatusEl.textContent=`Id Scan: Tile ID = ${tid}`;
+                    }
+                    updateScanIdStatusPosition();
+                }
+            };
+            cell.onmouseleave=()=>{
+                if(idScanMode){
+                    scanOverlay.style.display="none";
+                }
+            };
+            rowDiv.appendChild(cell);
+        }
+        canvasWrap.appendChild(rowDiv);
+    }
 }
+function paintCell(cellEl,logicalY,x){
+    if(!editorReady)return;
+    if(eraseMode){mapData[logicalY][x]=-1;}
+    else if(selectedTile!==null){mapData[logicalY][x]=selectedTile;}
+    updateCellDOM(cellEl,logicalY,x);
+}
+document.body.onmouseup=()=>{isDragging=false;};
+// ========= renderPalette =========
+function renderPalette(){
+    palette.innerHTML="";
+    const visibleTilesAll = tileList.filter(t=>!t.isEmptyTile);
+    const totalPage = Math.ceil(visibleTilesAll.length / TILES_PER_PAGE);
+    if(totalPage===0){currentPage=0;}
+    else{if(currentPage>=totalPage)currentPage=totalPage-1;if(currentPage<0)currentPage=0;}
+    pageInfoSpan.textContent = `${currentPage+1}/${totalPage||0}`;
+    const start = currentPage * TILES_PER_PAGE;
+    const end = start + TILES_PER_PAGE;
+    const pageTiles = visibleTilesAll.slice(start,end);
+    pageTiles.forEach((tileObj)=>{
+        const realIdx = tileList.indexOf(tileObj);
+        const wrap = document.createElement("div");
+        wrap.className = "palette-tile-wrap";
+        const d = document.createElement("div");
+        d.className = "palette-tile" + (selectedTile === realIdx ? " selected" : "");
+        if(tileObj.placeholder || tileObj.src === null){
+            d.style.background = "#382020";
+            d.style.backgroundImage = "";
+        }else{
+            d.style.backgroundImage = `url(${tileObj.src})`;
+        }
+        const idLabel = document.createElement("div");
+        idLabel.className = "palette-tile-id";
+        idLabel.textContent = tileObj.id ?? "";
+        d.onclick = ()=>{
+            if(!editorReady) return;
+            selectedTile = realIdx;
+            eraseMode = false;
+            eraseBtn.textContent = "Erase Mode";
+            tileIdInput.value = tileList[selectedTile].id ?? "";
+            renderPalette();
+            renderQuickBar();
+        };
+        wrap.appendChild(d);
+        wrap.appendChild(idLabel);
+        palette.appendChild(wrap);
+    });
+    const needPlaceholderCount = TILES_PER_PAGE - pageTiles.length;
+    for(let i = 0; i < needPlaceholderCount; i++){
+        const wrap = document.createElement("div");
+        wrap.className = "palette-tile-wrap";
+        const d = document.createElement("div");
+        d.className = "palette-tile placeholder-tile";
+        d.style.backgroundImage = `url(assets/placeholder tile.png)`;
+        d.style.backgroundSize = "100% 100%";
+        d.style.backgroundPosition = "center";
+        d.style.backgroundRepeat = "no‑repeat";
+        wrap.appendChild(d);
+        palette.appendChild(wrap);
+    }
+    pageNumbersDiv.innerHTML="";
+}
+pageFirstBtn.onclick = ()=>{
+    if(!editorReady)return;
+    const vis=tileList.filter(t=>!t.isEmptyTile);
+    const tp=Math.ceil(vis.length/TILES_PER_PAGE);
+    if(tp<=0)return;currentPage=0;renderPalette();
+};
+pagePrevBtn.onclick=()=>{if(!editorReady)return;if(currentPage>0){currentPage--;renderPalette();}};
+pageNextBtn.onclick=()=>{
+    if(!editorReady)return;
+    const vis=tileList.filter(t=>!t.isEmptyTile);
+    const tp=Math.ceil(vis.length/TILES_PER_PAGE);
+    if(currentPage<tp-1){currentPage++;renderPalette();}
+};
+pageLastBtn.onclick=()=>{
+    if(!editorReady)return;
+    const vis=tileList.filter(t=>!t.isEmptyTile);
+    const tp=Math.ceil(vis.length/TILES_PER_PAGE);
+    if(tp<=0)return;currentPage=tp-1;renderPalette();
+};
+function updateIdPreview(previewEl,tileId){
+    const tid=String(tileId??"").trim();
+    if(!tid||!tileIdMap.hasOwnProperty(tid)){previewEl.style.background="#111";previewEl.style.backgroundImage="";return;}
+    const idx=tileIdMap[tid];const t=tileList[idx];
+    if(t.isEmptyTile||t.placeholder||t.src===null){previewEl.style.background="#382020";previewEl.style.backgroundImage="";}
+    else{
+        previewEl.style.backgroundImage=`url(${t.src})`;
+        previewEl.style.backgroundSize="contain";
+        previewEl.style.backgroundPosition="center";
+        previewEl.style.backgroundRepeat="no‑repeat";
+    }
+}
+function renderQuickBar(){
+    quickTileBar.innerHTML="";
+    quickTileIdList.forEach((tidRaw,idx)=>{
+        const tid=String(tidRaw);
+        const itemWrap=document.createElement("div");
+        itemWrap.className="quick-item-wrap";
+        const prevBox=document.createElement("div");
+        prevBox.className="quick-item-preview";
+        if(tileIdMap.hasOwnProperty(tid)){
+            const tIdx=tileIdMap[tid];const t=tileList[tIdx];
+            if(!t.isEmptyTile&&!t.placeholder&&t.src){
+                prevBox.style.backgroundImage=`url(${t.src})`;
+                prevBox.style.backgroundSize="contain";
+                prevBox.style.backgroundPosition="center";
+                prevBox.style.backgroundRepeat="no‑repeat";
+            }else if(t.placeholder){prevBox.style.background="#382020";}
+        }
+        const btn=document.createElement("button");
+        btn.className="quick-item-idbtn";
+        btn.textContent=tid;
+        if(tileIdMap[tid]===selectedTile)btn.style.background="#0af";
+        itemWrap.onclick=(e)=>{
+            if(e.target.classList.contains("quick-item-del-icon")) return;
+            if(!editorReady)return;
+            if(tileIdMap.hasOwnProperty(tid)){
+                selectedTile=tileIdMap[tid];eraseMode=false;eraseBtn.textContent="Erase Mode";
+                tileIdInput.value=tileList[selectedTile].id??"";renderPalette();renderQuickBar();
+            }else{alert(`Tile id ${tid} not found`);}
+        };
+        const delImg=document.createElement("img");
+        delImg.className="quick-item-del-icon";
+        delImg.src="./assets/icons/delete.png";
+        delImg.title="Delete this quick tile";
+        delImg.onclick=(ev)=>{
+            ev.stopPropagation();
+            quickTileIdList.splice(idx,1);
+            renderQuickBar();
+        };
+        itemWrap.appendChild(prevBox);
+        itemWrap.appendChild(btn);
+        itemWrap.appendChild(delImg);
+        quickTileBar.appendChild(itemWrap);
+    });
+}
+selectByIdBtn.onclick=()=>{
+    if(!editorReady)return;
+    const inputId=String(selectByIdInput.value.trim());
+    if(!tileIdMap.hasOwnProperty(inputId)){alert(`Tile ID "${inputId}" does not exist.`);return;}
+    selectedTile=tileIdMap[inputId];eraseMode=false;eraseBtn.textContent="Erase Mode";
+    tileIdInput.value=tileList[selectedTile].id??"";selectByIdInput.value="";updateIdPreview(idPreview,"");
+    renderPalette();renderQuickBar();
+};
+addQuickTileBtn.onclick=()=>{
+    if(!editorReady)return;
+    const rawInput = quickAddIdInput.value.trim();
+    const qid = normalizeQuickId(rawInput);
+    if(!qid)return;
+    if(!tileIdMap.hasOwnProperty(qid)){alert(`Tile ID "${qid}" does not exist.`);return;}
+    if(!quickTileIdList.includes(qid))quickTileIdList.push(qid);
+    quickAddIdInput.value="";
+    updateQuickIdStatus();
+    renderQuickBar();
+};
+loadQuickIdFileBtn.onclick=()=>{if(!editorReady)return;quickIdFileInput.click();};
+quickIdFileInput.onchange=async (evt)=>{
+    const file=evt.target.files[0];if(!file)return;
+    const text=await file.text();
+    let parseText=text.trim();
+    if(parseText.startsWith("const quickBrushList =")) parseText=parseText.replace(/^const quickBrushList\s*=\s*/,"").replace(/;$/,"");
+    try{
+        const arrRaw=JSON.parse(parseText);if(!Array.isArray(arrRaw))throw new Error("not array");
+        const arr=arrRaw.map(item=>String(item));
+        externalPresetIdList=arr;externalPresetIndex=0;
+        arr.forEach(idStr=>{if(!quickTileIdList.includes(idStr))quickTileIdList.push(idStr);});
+        renderQuickBar();alert(`Quick‑IDs loaded, total ${arr.length} entries, added to quick bar.`);
+    }catch(err){alert("Parse quick‑id file failed!\nJS export format: const quickBrushList = [\"01\",\"02\"];");console.error(err);}
+    quickIdFileInput.value="";
+};
+eraseBtn.onclick=()=>{
+    if(!editorReady)return;
+    eraseMode=!eraseMode;
+    if(eraseMode){extractMode=false;extractIdBtn.textContent="Extract ID";extractIdBtn.classList.remove("btn‑extract‑active");}
+    selectedTile=null;tileIdInput.value="";
+    eraseBtn.textContent=eraseMode?"[Erase Active]":"Erase Mode";
+    renderPalette();renderQuickBar();
+};
+btnRebuild.onclick=()=>{
+    if(!editorReady)return;
+    pushUndoSnapshot();
+    rows=parseInt(document.getElementById("inRows").value)||1200;if(rows<1)rows=1;
+    newMap();render();layoutQuickPanel();
+};
+exportBtn.onclick=()=>{
+    if(!editorReady)return;
+    refreshOutputJson();
+    const saveName=getSaveFileName("json");if(!saveName)return;
+    const blob=new Blob([txtOut.value],{type:"application/json"});
+    const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download=saveName;document.body.appendChild(a);a.click();a.remove();
+};
+exportLevelTxtBtn.onclick=()=>{
+    if(!editorReady)return;
+    refreshOutputTxt();
+    const saveName=getSaveFileName("txt");if(!saveName)return;
+    const blob=new Blob([txtOut.value],{type:"text/plain"});
+    const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download=saveName;document.body.appendChild(a);a.click();a.remove();
+};
+levelTxtInput.onchange=async (evt)=>{
+    const file=evt.target.files[0];if(!file)return;
+    const text=await file.text();
+    const lines=text.split(/\r?\n/);
+    let readData=false;let rawDataLines=[];
+    for(let ln of lines){
+        const line=ln.trim();
+        if(line==="data="){readData=true;continue;}
+        if(readData&&line.length>0)rawDataLines.push(line);
+    }
+    cols=5;
+    const realDataRowCount = rawDataLines.length;
+    rows = realDataRowCount;
+    document.getElementById("inRows").value = rows;
+    newMap();
+    for(let txtLineIdx=0;txtLineIdx<rawDataLines.length;txtLineIdx++){
+        const mapY=rows-1-txtLineIdx;if(mapY<0)continue;
+        const nums=rawDataLines[txtLineIdx].split(",").map(s=>s.trim()).filter(s=>s.length>0);
+        for(let x=0;x<cols;x++){
+            const strNum=nums[x];
+            const numVal=parseInt(strNum,10);
+            if(!strNum||numVal===0){mapData[mapY][x]=-1;}
+            else{
+                const seekId=String(numVal).padStart(2,"0");
+                if(tileIdMap.hasOwnProperty(seekId)){mapData[mapY][x]=tileIdMap[seekId];}
+                else{tileList.push({img:null,id:seekId,isEmptyTile:false,placeholder:true});sortTilesById();mapData[mapY][x]=tileIdMap[seekId];}
+            }
+        }
+    }
+    render();renderPalette();renderQuickBar();layoutQuickPanel();
+    undoStack.length=0;redoStack.length=0;updateUndoRedoButtonState();
+    updateQuickIdStatus();
+    alert(`Loaded level, fixed width=5, actual detected height=${rows}`);
+    levelTxtInput.value='';
+};
+levelJsonInput.onchange=async (evt)=>{
+    const file=evt.target.files[0];if(!file)return;
+    const text=await file.text();let obj;
+    try{obj=JSON.parse(text);}catch(e){alert("JSON parse failed, invalid file format");console.error(e);return;}
+    if(!obj.map||!obj.rows){alert("Level JSON missing map / rows fields");return;}
+    cols=5;rows=Number(obj.rows);document.getElementById("inRows").value=rows;newMap();
+    if(obj.tileManifest&&Array.isArray(obj.tileManifest)){
+        for(const m of obj.tileManifest){
+            const tid=String(m.id);
+            if(tid==="00")continue;
+            if(!tileIdMap.hasOwnProperty(tid))tileList.push({img:null,id:tid,isEmptyTile:false,placeholder:true});
+        }
+        sortTilesById();renderPalette();
+    }
+    const importMap=obj.map;
+    for(let y=0;y<rows;y++){
+        for(let x=0;x<cols;x++){
+            const cellVal=importMap[y][x];
+            if(cellVal===0||cellVal==="0")mapData[y][x]=-1;
+            else{
+                const sid=String(cellVal);
+                if(tileIdMap.hasOwnProperty(sid))mapData[y][x]=tileIdMap[sid];
+                else mapData[y][x]=-1;
+            }
+        }
+    }
+    render();renderPalette();renderQuickBar();layoutQuickPanel();
+    undoStack.length=0;redoStack.length=0;updateUndoRedoButtonState();
+    updateQuickIdStatus();
+    alert(`Successfully loaded level JSON: fixed width 5, height ${rows}`);
+    levelJsonInput.value='';
+};
+refreshSnapshotSelectUI();
+renderLevelCardList();
+initEmptyZeroTile();
+newMap();
+render();
+renderPalette();
+renderQuickBar();
+layoutQuickPanel();
+updateUndoRedoButtonState();
+updateQuickIdStatus();
+fetchPackRepoTxtList();
+autoLoadGithubTileset();
+</script>
+</body>
+</html>
