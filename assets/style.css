@@ -1,0 +1,233 @@
+@font-face {
+    font-family: "Sen";
+    src: url("./assets/sen-bold.ttf") format("truetype");
+    font-weight: bold;
+    font-style: normal;
+}
+hr.divider{
+    border:none;
+    height:1px;
+    background:#444;
+    margin:14px 0;
+}
+.pagination{
+    display:flex;
+    flex-direction:row;
+    gap:8px;
+    align-items:center;
+    flex-wrap:wrap;
+}
+.pagination button.page-num{
+    padding:3px 8px;
+    margin:0;
+}
+.pagination button.page-num.active{
+    background:#0cf;
+}
+*{
+    box-sizing:border-box;
+    font-family: "Sen", system-ui, sans-serif;
+    font-weight: bold;
+}
+body{
+    padding:16px;
+    margin:0;
+    background:#222;
+    color:#eee;
+}
+.container{
+    display:flex;
+    gap:20px;
+}
+.panel{
+    background:#333;
+    padding:12px;
+    border-radius:8px;
+}
+.canvas-container{
+    display:flex;
+}
+.y-label-col{
+    display:flex;
+    flex-direction:column-reverse;
+    padding-right:6px;
+    justify-content:flex-end;
+}
+.y-label{
+    height:64px;
+    line-height:64px;
+    text-align:right;
+    color:#aaa;
+    font-size:12px;
+}
+.tile-cell{
+    width:64px;
+    height:64px;
+    border:1px solid #444;
+    background:#2a2a2a;
+    background-size:contain;
+    background-position:center;
+    background-repeat:no-repeat;
+}
+.tile-cell:hover{
+    background:#444;
+}
+.row{
+    display:flex;
+    position: relative;
+}
+button{
+    padding:6px 12px;
+    margin:3px;
+    border:none;
+    border-radius:4px;
+    background:#48f;
+    color:#fff;
+    cursor:pointer;
+}
+button.del-btn{
+    background:#f44;
+}
+button:disabled{
+    background:#555;
+    color:#888;
+    cursor:not-allowed;
+}
+input.tile-id-input{
+    width:100px;
+    padding:4px;
+}
+textarea{
+    width:100%;
+    height:140px;
+    background:#111;
+    color:#0f0;
+    font-size:12px;
+}
+.config-row{
+    margin:8px 0;
+}
+#loadingOverlay{
+    position:fixed;
+    inset:0;
+    background:rgba(0,0,0,0.85);
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    justify-content:center;
+    z-index:9999;
+    color:white;
+    font-size:18px;
+}
+/* modal 弹窗样式 */
+.modalOverlay {
+    position: fixed;
+    inset: 0;
+    background-color:rgba(0,0,0,0.5);
+    display:none;
+    z-index:99999;
+    align-items:center;
+    justify-content:center;
+}
+.modalBox {
+    background:#2b2b2b;
+    color:#fff;
+    padding:16px;
+    border-radius:8px;
+    width:620px;
+    max-width:95vw;
+    max-height:90vh;
+    overflow-y:auto;
+}
+.modalBox textarea {
+    width:100%;
+    height:240px;
+    background:#111;
+    color:#0f0;
+    margin:8px 0;
+}
+.modalBtnRow {
+    display:flex;
+    gap:8px;
+    flex-wrap:wrap;
+    margin:8px 0;
+}
+.modalClose {
+    background:#f44;
+}
+.btnImportFile {
+    background:#217ad9;
+    color:#fff;
+    border:none;
+    padding:6px 14px;
+    border-radius:4px;
+    cursor:pointer;
+}
+.btnImportFile:hover {
+    background:#1964b8;
+}
+.top-float-bar{
+    position:fixed;
+    top:8px;
+    right:12px;
+    z-index:9999;
+    display:flex;
+    gap:6px;
+    align-items:center;
+    background:rgba(0,0,0,0.65);
+    padding:6px 10px;
+    border-radius:6px;
+}
+#snapshotSelect{
+    min-width:180px;
+    padding:4px;
+}
+.snap-btn{
+    padding:4px 8px;
+    cursor:pointer;
+}
+.btn-red{
+    background:#b72424;
+    color:white;
+    border:none;
+    padding:4px 8px;
+    border-radius:3px;
+    cursor:pointer;
+}
+.btn-red:hover{
+    background:#d42c2c;
+}
+.btn-extract-active{
+    background:#28a745;
+    color:white;
+}
+.group-block{
+    border:1px solid #444;
+    padding:8px;
+    margin:8px 0;
+    border-radius:4px;
+}
+.group-block h5{
+    margin:0 0 6px 0;
+    font-size:14px;
+    color:#ccc;
+}
+.visually-hidden-file{
+    position: absolute;
+    opacity: 0;
+    width:1px;
+    height:1px;
+    overflow:hidden;
+    pointer-events:auto;
+}
+.row.highlightBlockRow::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background-color: rgba(80, 220, 80, 0.22);
+    z-index: -1;
+    pointer-events: none;
+}
+.y-label.highlightBlockLabel {
+    color:#78ee78;
+}
