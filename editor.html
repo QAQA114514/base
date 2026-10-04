@@ -924,6 +924,7 @@ let allRemoteModZipList = [];
  *    tilePrefix:string,
  *    tileStartIndex:number,
  *    tileCount:number,
+ *    modIconUrl:string|null
  * }]
  */
 let activeMods = [];
@@ -969,7 +970,8 @@ async function fetchRemoteModZipList(){
             return {
                 zipName: item.path.split("/").pop(),
                 path: item.path,
-                downloadUrl: "https://raw.githubusercontent.com/QAQA114514/modbase/main/" + item.path
+                downloadUrl: "https://raw.githubusercontent.com/QAQA114514/modbase/main/" + item.path,
+                previewAuthors: null
             };
         });
         renderRemoteModList();
@@ -988,13 +990,16 @@ function renderRemoteModList(){
     allRemoteModZipList.forEach(modItem=>{
         const div = document.createElement("div");
         div.className = "mod-remote-item";
+        let authorText = modItem.previewAuthors ? ("Authors: "+escapeHtml(modItem.previewAuthors.join(", "))) : "Authors: (click load to read)";
         div.innerHTML = `
             <div style="font-weight:bold;margin-bottom:4px;">${escapeHtml(modItem.zipName)}</div>
-            <div style="font-size:12px;color:#aaa;margin-bottom:6px;">Path:${escapeHtml(modItem.path)}</div>
+            <div style="font-size:12px;color:#aaa;margin-bottom:4px;">${authorText}</div>
+            <div style="font-size:11px;color:#aaa;margin-bottom:6px;">Path:${escapeHtml(modItem.path)}</div>
             <button class="mod-load-btn">Load Mod</button>
         `;
         div.querySelector(".mod-load-btn").onclick = async ()=>{
             await loadRemoteModZip(modItem);
+            renderRemoteModList();
         };
         modRemoteListWrap.appendChild(div);
     });
@@ -1009,10 +1014,15 @@ function renderActiveModList(){
     activeMods.forEach((mod,idx)=>{
         const div = document.createElement("div");
         div.className = "mod-active-item";
+        let iconStyle = "width:36px;height:36px;background:#222;border:1px solid #555;flex-shrink:0;border-radius:4px;";
+        if(mod.modIconUrl){
+            iconStyle += `background-image:url(${mod.modIconUrl});background-size:contain;background-position:center;background-repeat:no-repeat;`;
+        }
         div.innerHTML = `
+            <div style="${iconStyle}"></div>
             <div style="flex-grow:1;">
                 <div style="font-weight:bold;">${escapeHtml(mod.pack.name)} <span style="color:#8cf;font-size:11px;">v${escapeHtml(mod.pack.version)}</span></div>
-                <div style="font-size:11px;color:#aaa;">Tag prefix:${escapeHtml(mod.tilePrefix)} | Authors:${escapeHtml((mod.pack.authors||[]).join(","))}</div>
+                <div style="font-size:11px;color:#aaa;">Tag prefix:${escapeHtml(mod.tilePrefix)} | Authors:${escapeHtml((mod.pack.authors||[]).join(", "))}</div>
             </div>
             <button class="mod-unload-btn" style="background:#922;border:none;color:#fff;padding:3px 8px;border-radius:3px;">Unload</button>
         `;
@@ -1040,13 +1050,29 @@ async function loadRemoteModZip(modItem){
         if(!packObj.name || !packObj.version || !packObj.tag || !Array.isArray(packObj.authors)){
             throw new Error("pack.js invalid fields");
         }
+        modItem.previewAuthors = packObj.authors;
+
         const pngFile = zip.file("tileset.png");
         if(!pngFile) throw new Error("zip missing tileset.png");
         const pngBlob = await pngFile.async("blob");
         const pngUrl = URL.createObjectURL(pngBlob);
+
+        let modIconUrl = null;
+        const iconZipEntry = zip.file("icon.png");
+        if(iconZipEntry){
+            const iconBlob = await iconZipEntry.async("blob");
+            modIconUrl = URL.createObjectURL(iconBlob);
+        }
+
         const prefix = String(packObj.tag).trim();
         await sliceModTilesetPng(pngUrl, prefix, modItem.zipName, packObj, modItem.downloadUrl);
         URL.revokeObjectURL(pngUrl);
+
+        const lastAdded = activeMods[activeMods.length -1];
+        if(lastAdded){
+            lastAdded.modIconUrl = modIconUrl;
+        }
+
         renderActiveModList();
         renderPalette();
         renderQuickBar();
@@ -1095,7 +1121,8 @@ async function sliceModTilesetPng(imgUrl, tagPrefix, zipName, packObj, downloadU
                 pack: packObj,
                 tilePrefix: tagPrefix,
                 tileStartIndex: startIdx,
-                tileCount: total
+                tileCount: total,
+                modIconUrl: null
             });
             resolve(true);
         };
@@ -1107,14 +1134,14 @@ async function sliceModTilesetPng(imgUrl, tagPrefix, zipName, packObj, downloadU
 function unloadMod(modIndex){
     const mod = activeMods[modIndex];
     if(!mod) return;
-    // remove tileList entries
+    if(mod.modIconUrl){
+        URL.revokeObjectURL(mod.modIconUrl);
+    }
     tileList.splice(mod.tileStartIndex, mod.tileCount);
-    // rebuild tileIdMap
     tileIdMap = {};
     tileList.forEach((t,idx)=>{
         tileIdMap[t.id] = idx;
     });
-    // deselect if selected tile got deleted
     if(selectedTile !== null && selectedTile >= mod.tileStartIndex){
         selectedTile = null;
         tileIdInput.value = "";
@@ -1476,7 +1503,6 @@ let quickTileIdList = [];
 let editorReady = false;
 let idScanMode = false;
 let currentTilesetFileName = "tileset01.png";
-// preset filter feature + 分页
 let originalFullTileList = [];
 let presetFilterActive = false;
 let currentPresetTileIds = [];
@@ -2535,3 +2561,4 @@ autoLoadGithubTileset();
 </script>
 </body>
 </html>
+
