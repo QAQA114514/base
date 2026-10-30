@@ -669,7 +669,6 @@ button:disabled {
     <img src="assets/mod.png" style="width:16px;height:16px;vertical-align:middle;margin-right:4px;">Mods
 </button>
 <button class="announce-btn" id="announceOpenBtn">Announcement</button>
-
 <div class="mod-manager-backdrop" id="modManagerBackdrop">
     <div class="mod-manager-box">
         <div class="mod-manager-header">
@@ -690,7 +689,6 @@ button:disabled {
         </div>
     </div>
 </div>
-
 <div class="modal-backdrop" id="modMissingModal">
     <div class="modal-box">
         <div class="modal-text" id="modMissingMessage"></div>
@@ -700,7 +698,6 @@ button:disabled {
         </div>
     </div>
 </div>
-
 <div class="announce-modal-backdrop" id="announceBackdrop">
     <div class="announce-modal-box">
         <div class="announce-modal-header">
@@ -835,7 +832,7 @@ button:disabled {
             <button id="btnExpandMapUp">Expand Map Up</button>
         </div>
         <button id="btnRebuild">Rebuild Canvas</button>
-        <p style="color:#fa4;font-size:12px;">Editor Version : <strong>2.3.0‑preset‑icon‑paged + ModSystem</strong></p>
+        <p style="color:#fa4;font-size:12px;">Editor Version : <strong>2.4.0‑idList‑mod</strong></p>
     </div>
 </div>
 <div class="panel-canvas" id="canvasOuterWrap">
@@ -912,7 +909,6 @@ announceBackdrop.onclick = function(e){
         closeAnnounceModal();
     }
 };
-
 // ===================== MOD SYSTEM =====================
 const MOD_REPO_API = "https://api.github.com/repos/QAQA114514/modbase/git/trees/main?recursive=1";
 let allRemoteModZipList = [];
@@ -920,15 +916,13 @@ let allRemoteModZipList = [];
  * activeMods[{
  *    zipName:string,
  *    downloadUrl:string,
- *    pack:{name:string,version:string,authors:Array<string>,tag:string},
- *    tilePrefix:string,
+ *    pack:{name:string,version:string,authors:Array<string>,idList:Array<string>},
  *    tileStartIndex:number,
  *    tileCount:number,
  *    modIconUrl:string|null
  * }]
  */
 let activeMods = [];
-
 const modOpenBtn = document.getElementById("modOpenBtn");
 const modManagerBackdrop = document.getElementById("modManagerBackdrop");
 const modHeadClose = document.getElementById("modHeadClose");
@@ -939,7 +933,6 @@ const modMissingModal = document.getElementById("modMissingModal");
 const modMissingMessage = document.getElementById("modMissingMessage");
 const modMissingLinks = document.getElementById("modMissingLinks");
 const modMissingCloseBtn = document.getElementById("modMissingCloseBtn");
-
 function closeModManager(){
     modManagerBackdrop.style.display = "none";
 }
@@ -958,7 +951,6 @@ modManagerBackdrop.onclick = function(e){
 modMissingCloseBtn.onclick = function(){
     modMissingModal.style.display = "none";
 };
-
 async function fetchRemoteModZipList(){
     try{
         const resp = await fetch(MOD_REPO_API);
@@ -980,7 +972,6 @@ async function fetchRemoteModZipList(){
         modRemoteListWrap.innerHTML = `<div style="color:#f88;">Failed fetch mod repo (CORS/network error).</div>`;
     }
 }
-
 function renderRemoteModList(){
     modRemoteListWrap.innerHTML = "";
     if(allRemoteModZipList.length ===0){
@@ -1004,7 +995,6 @@ function renderRemoteModList(){
         modRemoteListWrap.appendChild(div);
     });
 }
-
 function renderActiveModList(){
     modActiveListWrap.innerHTML = "";
     if(activeMods.length ===0){
@@ -1018,11 +1008,12 @@ function renderActiveModList(){
         if(mod.modIconUrl){
             iconStyle += `background-image:url(${mod.modIconUrl});background-size:contain;background-position:center;background-repeat:no-repeat;`;
         }
+        const previewIds = mod.pack.idList.slice(0,3).join(", ") + (mod.pack.idList.length>3 ? " …" : "");
         div.innerHTML = `
             <div style="${iconStyle}"></div>
             <div style="flex-grow:1;">
                 <div style="font-weight:bold;">${escapeHtml(mod.pack.name)} <span style="color:#8cf;font-size:11px;">v${escapeHtml(mod.pack.version)}</span></div>
-                <div style="font-size:11px;color:#aaa;">Tag prefix:${escapeHtml(mod.tilePrefix)} | Authors:${escapeHtml((mod.pack.authors||[]).join(", "))}</div>
+                <div style="font-size:11px;color:#aaa;">Preview IDs:${escapeHtml(previewIds)} | Authors:${escapeHtml((mod.pack.authors||[]).join(", "))}</div>
             </div>
             <button class="mod-unload-btn" style="background:#922;border:none;color:#fff;padding:3px 8px;border-radius:3px;">Unload</button>
         `;
@@ -1032,7 +1023,6 @@ function renderActiveModList(){
         modActiveListWrap.appendChild(div);
     });
 }
-
 async function loadRemoteModZip(modItem){
     try{
         const resp = await fetch(modItem.downloadUrl);
@@ -1047,32 +1037,26 @@ async function loadRemoteModZip(modItem){
             const f = new Function("return ("+packJsText+")");
             packObj = f();
         }
-        if(!packObj.name || !packObj.version || !packObj.tag || !Array.isArray(packObj.authors)){
-            throw new Error("pack.js invalid fields");
+        if(!packObj.name || !packObj.version || !Array.isArray(packObj.authors) || !Array.isArray(packObj.idList)){
+            throw new Error("pack.js invalid fields! Must contain name,version,authors,idList(array)");
         }
         modItem.previewAuthors = packObj.authors;
-
         const pngFile = zip.file("tileset.png");
         if(!pngFile) throw new Error("zip missing tileset.png");
         const pngBlob = await pngFile.async("blob");
         const pngUrl = URL.createObjectURL(pngBlob);
-
         let modIconUrl = null;
         const iconZipEntry = zip.file("icon.png");
         if(iconZipEntry){
             const iconBlob = await iconZipEntry.async("blob");
             modIconUrl = URL.createObjectURL(iconBlob);
         }
-
-        const prefix = String(packObj.tag).trim();
-        await sliceModTilesetPng(pngUrl, prefix, modItem.zipName, packObj, modItem.downloadUrl);
+        await sliceModTilesetPng(pngUrl, modItem.zipName, packObj, modItem.downloadUrl);
         URL.revokeObjectURL(pngUrl);
-
         const lastAdded = activeMods[activeMods.length -1];
         if(lastAdded){
             lastAdded.modIconUrl = modIconUrl;
         }
-
         renderActiveModList();
         renderPalette();
         renderQuickBar();
@@ -1082,8 +1066,7 @@ async function loadRemoteModZip(modItem){
         alert("Load mod error: "+err.message);
     }
 }
-
-async function sliceModTilesetPng(imgUrl, tagPrefix, zipName, packObj, downloadUrl){
+async function sliceModTilesetPng(imgUrl, zipName, packObj, downloadUrl){
     return new Promise((resolve,reject)=>{
         const img = new Image();
         img.crossOrigin = "anonymous";
@@ -1096,14 +1079,21 @@ async function sliceModTilesetPng(imgUrl, tagPrefix, zipName, packObj, downloadU
                 reject(new Error("tileset.png too small, cannot slice 64x64"));
                 return;
             }
+            const idList = packObj.idList;
+            if(idList.length !== total){
+                reject(new Error(`pack.js idList length(${idList.length}) not match tiles count(${total})！请保证idList数组数量等于tileset的瓦片总数`));
+                return;
+            }
+
             const startIdx = tileList.length;
+            let tileSeqIndex = 0;
             for(let y=0;y<rowCount;y++){
                 for(let x=0;x<colCount;x++){
                     const cv = document.createElement("canvas");
                     cv.width = tw; cv.height = th;
                     const ctx = cv.getContext("2d");
                     ctx.drawImage(img, x*tw, y*th, tw, th,0,0,tw,th);
-                    const modId = `${tagPrefix}_${(y*colCount + x +1)}`;
+                    const modId = String(idList[tileSeqIndex]).trim();
                     tileList.push({
                         img:null,
                         id: modId,
@@ -1112,6 +1102,7 @@ async function sliceModTilesetPng(imgUrl, tagPrefix, zipName, packObj, downloadU
                         isModTile:true
                     });
                     tileIdMap[modId] = tileList.length -1;
+                    tileSeqIndex +=1;
                     await new Promise(r=>setTimeout(r,0));
                 }
             }
@@ -1119,7 +1110,6 @@ async function sliceModTilesetPng(imgUrl, tagPrefix, zipName, packObj, downloadU
                 zipName: zipName,
                 downloadUrl: downloadUrl,
                 pack: packObj,
-                tilePrefix: tagPrefix,
                 tileStartIndex: startIdx,
                 tileCount: total,
                 modIconUrl: null
@@ -1130,7 +1120,6 @@ async function sliceModTilesetPng(imgUrl, tagPrefix, zipName, packObj, downloadU
         img.src = imgUrl;
     });
 }
-
 function unloadMod(modIndex){
     const mod = activeMods[modIndex];
     if(!mod) return;
@@ -1154,7 +1143,6 @@ function unloadMod(modIndex){
     render();
     alert(`Unloaded mod ${mod.pack.name}`);
 }
-
 function showMissingModWarning(missingTagSet){
     modMissingLinks.innerHTML = "";
     modMissingMessage.textContent = "This level contains mod tiles, required mods not loaded!";
@@ -1175,7 +1163,6 @@ function showMissingModWarning(missingTagSet){
     modMissingModal.style.display = "flex";
 }
 // ===================== END MOD SYSTEM =====================
-
 function layoutQuickPanel() {
     const canvasWrap = document.getElementById("canvasOuterWrap");
     const side = document.getElementById("quickSidePanel");
@@ -2351,41 +2338,41 @@ function renderQuickBar(){
         const itemWrap=document.createElement("div");
         itemWrap.className="quick-item-wrap";
         const prevBox=document.createElement("div");
-        prevBox.className="quick-item-preview";
-        if(tileIdMap.hasOwnProperty(tid)){
-            const tIdx=tileIdMap[tid];const t=tileList[tIdx];
-            if(!t.isEmptyTile&&!t.placeholder&&t.src){
-                prevBox.style.backgroundImage=`url(${t.src})`;
-                prevBox.style.backgroundSize="contain";
-                prevBox.style.backgroundPosition="center";
-                prevBox.style.backgroundRepeat="no‑repeat";
-            }else if(t.placeholder){prevBox.style.background="#382020";}
-        }
-        const btn=document.createElement("button");
-        btn.className="quick-item-idbtn";
-        btn.textContent=tid;
-        if(tileIdMap[tid]===selectedTile)btn.style.background="#0af";
-        itemWrap.onclick=(e)=>{
-            if(e.target.classList.contains("quick-item-del-icon")) return;
-            if(!editorReady)return;
-            if(tileIdMap.hasOwnProperty(tid)){
-                selectedTile=tileIdMap[tid];eraseMode=false;eraseBtn.textContent="Erase Mode";
-                tileIdInput.value=tileList[selectedTile].id??"";renderPalette();renderQuickBar();
-            }else{alert(`Tile id ${tid} not found`);}
-        };
-        const delImg=document.createElement("img");
-        delImg.className="quick-item-del-icon";
-        delImg.src="./assets/icons/delete.png";
-        delImg.title="Delete this quick tile";
-        delImg.onclick=(ev)=>{
-            ev.stopPropagation();
-            quickTileIdList.splice(idx,1);
-            renderQuickBar();
-        };
-        itemWrap.appendChild(prevBox);
-        itemWrap.appendChild(btn);
-        itemWrap.appendChild(delImg);
-        quickTileBar.appendChild(itemWrap);
+prevBox.className="quick-item-preview";
+if(tileIdMap.hasOwnProperty(tid)){
+    const tIdx=tileIdMap[tid];const t=tileList[tIdx];
+    if(!t.isEmptyTile&&!t.placeholder&&t.src){
+        prevBox.style.backgroundImage=`url(${t.src})`;
+        prevBox.style.backgroundSize="contain";
+        prevBox.style.backgroundPosition="center";
+        prevBox.style.backgroundRepeat="no‑repeat";
+    }else if(t.placeholder){prevBox.style.background="#382020";}
+}
+const btn=document.createElement("button");
+btn.className="quick-item-idbtn";
+btn.textContent=tid;
+if(tileIdMap[tid]===selectedTile)btn.style.background="#0af";
+itemWrap.onclick=(e)=>{
+    if(e.target.classList.contains("quick-item-del-icon")) return;
+    if(!editorReady)return;
+    if(tileIdMap.hasOwnProperty(tid)){
+        selectedTile=tileIdMap[tid];eraseMode=false;eraseBtn.textContent="Erase Mode";
+        tileIdInput.value=tileList[selectedTile].id??"";renderPalette();renderQuickBar();
+    }else{alert(`Tile id ${tid} not found`);}
+};
+const delImg=document.createElement("img");
+delImg.className="quick-item-del-icon";
+delImg.src="./assets/icons/delete.png";
+delImg.title="Delete this quick tile";
+delImg.onclick=(ev)=>{
+    ev.stopPropagation();
+    quickTileIdList.splice(idx,1);
+    renderQuickBar();
+};
+itemWrap.appendChild(prevBox);
+itemWrap.appendChild(btn);
+itemWrap.appendChild(delImg);
+quickTileBar.appendChild(itemWrap);
     });
 }
 selectByIdBtn.onclick=()=>{
